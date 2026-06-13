@@ -1,0 +1,82 @@
+# Stale Buffer Guard
+
+Stale Buffer Guard warns when the active VS Code editor has unsaved local
+changes and the file on disk changed after the editor's saved baseline.
+
+It is designed for the specific footgun where another process edits a file while
+you still have unsaved edits in the same editor.
+
+## Behavior
+
+- Records each file editor's disk last-modified time when the document opens,
+  saves, is cleanly refreshed by VS Code, or you explicitly refresh the
+  baseline.
+- Clean buffers are allowed to track disk automatically.
+- Watches for disk changes and periodically checks the active editor.
+- If the editor is dirty and the file on disk is newer than the stored editor
+  baseline, shows:
+  - a warning status bar item: `STALE EDITOR BUFFER`
+  - a warning diagnostic on the first line
+  - a warning background across the visible editor buffer
+- editor-title actions in the always-visible editor header:
+  - `Check Active Editor`
+  - `Discard Buffer and Reload`
+  - `Keep Buffer`
+  - `Hide Warning`
+- Clicking the status bar item opens an action picker. It does not reload the
+  file unless you choose `Discard Buffer and Reload`.
+- The extension never silently reloads editors.
+- `Discard Buffer and Reload` always asks for explicit confirmation, even when
+  the editor is clean.
+- `Keep Buffer` accepts the current disk version as the new baseline and keeps
+  your editor contents.
+- `Hide Warning` hides the warning background and editor-title actions for the
+  current stale snapshot only. The buffer remains stale until you reload, save,
+  keep the buffer, or the disk file changes again.
+
+## Commands
+
+- `Stale Buffer Guard: Check Active Editor`
+- `Stale Buffer Guard: Keep Editor Buffer`
+- `Stale Buffer Guard: Discard Buffer and Reload`
+- `Stale Buffer Guard: Hide Editor Warning`
+- `Stale Buffer Guard: Show Actions`
+- `Stale Buffer Guard: Explain Stale Warning`
+
+## Settings
+
+```json
+{
+  "staleBufferGuard.enabled": true,
+  "staleBufferGuard.pollIntervalMs": 2000
+}
+```
+
+## Try It Locally
+
+Open this directory in VS Code:
+
+```bash
+code ~/dev/stalebufferguard
+```
+
+Press `F5` to launch an Extension Development Host.
+
+In the Extension Development Host:
+
+1. Open a file.
+2. Edit the same file from another terminal or tool.
+3. Return to the editor. The buffer should show a warning background and
+   editor-title actions.
+
+## Install Locally
+
+For quick development usage, run an Extension Development Host with this folder.
+
+For a normal install, package it with `vsce`:
+
+```bash
+npm install -g @vscode/vsce
+vsce package
+code --install-extension stale-buffer-guard-0.0.1.vsix
+```

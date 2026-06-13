@@ -1,0 +1,102 @@
+{
+  "name": "stale-buffer-guard",
+  "displayName": "Stale Buffer Guard",
+  "description": "Warns when an open editor buffer is older than the file on disk.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:staleBufferGuard.checkActiveEditor",
+    "onCommand:staleBufferGuard.refreshBaseline",
+    "onCommand:staleBufferGuard.reloadFromDisk",
+    "onCommand:staleBufferGuard.dismissEditorWarning",
+    "onCommand:staleBufferGuard.showActions",
+    "onCommand:staleBufferGuard.showStatus"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "staleBufferGuard.checkActiveEditor",
+        "title": "Stale Buffer Guard: Check Active Editor",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "staleBufferGuard.refreshBaseline",
+        "title": "Stale Buffer Guard: Keep Editor Buffer",
+        "icon": "$(check)"
+      },
+      {
+        "command": "staleBufferGuard.reloadFromDisk",
+        "title": "Stale Buffer Guard: Discard Buffer and Reload",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "staleBufferGuard.dismissEditorWarning",
+        "title": "Stale Buffer Guard: Hide Editor Warning",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "staleBufferGuard.showActions",
+        "title": "Stale Buffer Guard: Show Actions",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "staleBufferGuard.showStatus",
+        "title": "Stale Buffer Guard: Explain Stale Warning",
+        "icon": "$(warning)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "staleBufferGuard.showStatus",
+          "when": "staleBufferGuard.activeEditorWarningVisible",
+          "group": "navigation@1"
+        },
+        {
+          "command": "staleBufferGuard.checkActiveEditor",
+          "when": "staleBufferGuard.activeEditorWarningVisible",
+          "group": "navigation@2"
+        },
+        {
+          "command": "staleBufferGuard.reloadFromDisk",
+          "when": "staleBufferGuard.activeEditorWarningVisible",
+          "group": "navigation@3"
+        },
+        {
+          "command": "staleBufferGuard.refreshBaseline",
+          "when": "staleBufferGuard.activeEditorWarningVisible",
+          "group": "navigation@4"
+        },
+        {
+          "command": "staleBufferGuard.dismissEditorWarning",
+          "when": "staleBufferGuard.activeEditorWarningVisible",
+          "group": "navigation@5"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Stale Buffer Guard",
+      "properties": {
+        "staleBufferGuard.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable stale open-buffer detection."
+        },
+        "staleBufferGuard.pollIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 250,
+          "description": "How often to re-check the active editor for a newer file on disk."
+        }
+      }
+    }
+  }
+}
