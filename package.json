@@ -1,7 +1,7 @@
 {
   "name": "stale-buffer-guard",
   "displayName": "Stale Buffer Guard",
-  "description": "Warns when an open editor buffer is older than the file on disk.",
+  "description": "Stops stale VS Code editor tabs after disk changes and warns when unsaved edits are based on old contents.",
   "version": "0.1.0",
   "publisher": "omry",
   "license": "MIT",
@@ -19,6 +19,10 @@
   "categories": [
     "Other"
   ],
+  "scripts": {
+    "check": "node --check extension.js && node --check stale-state.js && npm test",
+    "test": "node test/*.test.js"
+  },
   "activationEvents": [
     "onStartupFinished",
     "onCommand:staleBufferGuard.checkActiveEditor",
@@ -103,7 +107,7 @@
           "type": "number",
           "default": 2000,
           "minimum": 250,
-          "description": "How often to re-check the active editor for a newer file on disk."
+          "description": "How often to re-check open file editors for changed files on disk."
         }
       }
     }

@@ -13,8 +13,7 @@ Before packaging, update `version` in `package.json`.
 Run the local checks:
 
 ```bash
-node --check extension.js
-node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); console.log('package.json ok')"
+npm run check
 ```
 
 Package with dependency detection disabled. This extension has no npm
@@ -28,7 +27,7 @@ vsce package --no-dependencies
 The package should be small. For `0.1.0`, the expected shape was:
 
 ```text
-6 files, about 8 KB
+6 files, about 26 KB
 ```
 
 If the package looks unexpectedly large, inspect it before uploading:

@@ -4,3 +4,4 @@
 .gitignore
 *.vsix
 README.md
+test/**

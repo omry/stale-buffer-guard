@@ -1,33 +1,35 @@
 # Stale Buffer Guard
 
-Stale Buffer Guard warns when the active VS Code editor has unsaved local
-changes and the file on disk changed after the editor's saved baseline.
+Stale Buffer Guard helps with open VS Code editors that can present stale
+information after the file changes on disk.
 
-It is designed for the specific footgun where another process edits a file while
-you still have unsaved edits in the same editor.
+It is designed for the confusing workflow where version control, formatters,
+and agents can all change files while those same files are already open in the
+editor. A stale editor view can cost time, lead
+you to reason from old information, or turn into a save-time conflict right when
+you thought you were done. The extension tracks the editor's saved disk baseline,
+follows clean disk updates, and warns when unsaved edits are based on older file
+contents, before VS Code's overwrite prompt interrupts you at save time.
 
 ## Behavior
 
 - Records each file editor's disk last-modified time when the document opens,
-  saves, is cleanly refreshed by VS Code, or you explicitly refresh the
+  saves, reloads from disk, cleanly changes, or you explicitly refresh the
   baseline.
-- Clean buffers are allowed to track disk automatically.
-- Watches for disk changes and periodically checks the active editor.
-- If the editor is dirty and the file on disk is newer than the stored editor
+- When VS Code updates a clean document from disk, the extension refreshes its
+  baseline for that document.
+- Watches workspace disk changes and periodically checks all open file editors,
+  including files outside the workspace.
+- If the editor is dirty and the file on disk differs from the stored editor
   baseline, shows:
-  - a warning status bar item: `STALE EDITOR BUFFER`
-  - a warning diagnostic on the first line
   - a warning background across the visible editor buffer
+  - a warning status bar item: `STALE EDITOR BUFFER`
 - editor-title actions in the always-visible editor header:
   - `Check Active Editor`
   - `Discard Buffer and Reload`
   - `Keep Buffer`
   - `Hide Warning`
-- Clicking the status bar item opens an action picker. It does not reload the
-  file unless you choose `Discard Buffer and Reload`.
-- The extension never silently reloads editors.
-- `Discard Buffer and Reload` always asks for explicit confirmation, even when
-  the editor is clean.
+- Clicking the status bar item opens an action picker.
 - `Keep Buffer` accepts the current disk version as the new baseline and keeps
   your editor contents.
 - `Hide Warning` hides the warning background and editor-title actions for the
@@ -65,8 +67,9 @@ Press `F5` to launch an Extension Development Host.
 In the Extension Development Host:
 
 1. Open a file.
-2. Edit the same file from another terminal or tool.
-3. Return to the editor. The buffer should show a warning background and
+2. Make an unsaved edit in the editor.
+3. Edit the same file from another terminal or tool.
+4. Return to the editor. The buffer should show a warning background and
    editor-title actions.
 
 ## Install Locally
@@ -78,5 +81,5 @@ For a normal install, package it with `vsce`:
 ```bash
 npm install -g @vscode/vsce
 vsce package
-code --install-extension stale-buffer-guard-0.0.1.vsix
+code --install-extension stale-buffer-guard-0.1.0.vsix
 ```

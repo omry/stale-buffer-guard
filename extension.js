@@ -1,6 +1,15 @@
 "use strict";
 
 const vscode = require("vscode");
+const {
+  DECISION_CLEAR_DOCUMENT,
+  DECISION_CLEAR_STALE,
+  DECISION_MARK_STALE,
+  DECISION_READ_CONTENT,
+  DECISION_REFRESH_BASELINE,
+  decideStaleState,
+  textMatchesText,
+} = require("./stale-state");
 
 const baselines = new Map();
 const staleUris = new Set();
@@ -12,7 +21,6 @@ const ACTION_KEEP_BUFFER = "Keep Buffer";
 const ACTION_HIDE_WARNING = "Hide Warning";
 
 let statusBar;
-let diagnostics;
 let pollTimer;
 let pollDisposable;
 let staleBackgroundDecoration;
@@ -25,13 +33,12 @@ function activate(context) {
   statusBar.name = "Stale Buffer Guard";
   statusBar.text = "$(warning) STALE EDITOR BUFFER";
   statusBar.tooltip =
-    "The active editor buffer is older than the file on disk. Click for actions.";
+    "The active editor buffer is based on an older disk baseline. Click for actions.";
   statusBar.command = "staleBufferGuard.showActions";
   statusBar.backgroundColor = new vscode.ThemeColor(
     "statusBarItem.warningBackground",
   );
 
-  diagnostics = vscode.languages.createDiagnosticCollection("stale-buffer-guard");
   staleBackgroundDecoration = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
     overviewRulerColor: new vscode.ThemeColor(
@@ -48,7 +55,6 @@ function activate(context) {
 
   context.subscriptions.push(
     statusBar,
-    diagnostics,
     staleBackgroundDecoration,
     vscode.commands.registerCommand(
       "staleBufferGuard.checkActiveEditor",
@@ -69,10 +75,10 @@ function activate(context) {
     vscode.commands.registerCommand("staleBufferGuard.showActions", showActions),
     vscode.commands.registerCommand("staleBufferGuard.showStatus", showStatus),
     vscode.workspace.onDidOpenTextDocument((document) => {
-      void refreshBaseline(document);
+      void refreshBaseline(document, { force: false });
     }),
     vscode.workspace.onDidSaveTextDocument((document) => {
-      void refreshBaseline(document);
+      void refreshBaseline(document, { force: true });
     }),
     vscode.workspace.onDidCloseTextDocument((document) => {
       clearDocument(document.uri);
@@ -97,7 +103,7 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("staleBufferGuard")) {
         restartPolling(context);
-        void checkActiveEditor();
+        void checkOpenDocuments();
       }
     }),
   );
@@ -113,15 +119,15 @@ function activate(context) {
     }),
     watcher.onDidDelete((uri) => {
       clearDocument(uri);
-      void checkActiveEditor();
+      void checkOpenDocuments();
     }),
   );
 
   for (const document of vscode.workspace.textDocuments) {
-    void refreshBaseline(document);
+    void refreshBaseline(document, { force: false });
   }
   restartPolling(context);
-  void checkActiveEditor();
+  void checkOpenDocuments();
 }
 
 function deactivate() {
@@ -140,7 +146,7 @@ function restartPolling(context) {
   }
   const interval = Math.max(250, getConfig().get("pollIntervalMs", 2000));
   pollTimer = setInterval(() => {
-    void checkActiveEditor();
+    void checkOpenDocuments();
   }, interval);
   pollDisposable = {
     dispose: () => {
@@ -158,7 +164,7 @@ async function refreshActiveBaseline(uri) {
   if (document === undefined) {
     return;
   }
-  await refreshBaseline(document);
+  await refreshBaseline(document, { force: true });
   await checkActiveEditor();
 }
 
@@ -235,6 +241,8 @@ async function showStatus() {
     return;
   }
   const document = editor.document;
+  await checkDocument(document);
+  const key = document.uri.toString();
   const baseline = baselines.get(document.uri.toString());
   let stat;
   try {
@@ -245,13 +253,19 @@ async function showStatus() {
     );
     return;
   }
-  const stale =
-    baseline !== undefined && document.isDirty && stat.mtime > baseline.mtime;
+  const stale = staleUris.has(key);
   const baselineText =
     baseline === undefined
       ? "none"
       : formatDateTime(baseline.mtime);
   const diskText = formatDateTime(stat.mtime);
+  const disk = await readDiskContent(document);
+  const diskMatchesBaseline =
+    disk !== undefined &&
+    baseline !== undefined &&
+    textMatchesText(disk.text, baseline.text);
+  const diskMatchesBuffer =
+    disk !== undefined && textMatchesText(disk.text, document.getText());
   const relativePath = vscode.workspace.asRelativePath(document.uri);
   await vscode.window.showInformationMessage(
     [
@@ -260,6 +274,8 @@ async function showStatus() {
       `Unsaved editor changes: ${document.isDirty ? "yes" : "no"}`,
       `File on disk changed: ${diskText}`,
       `Editor last matched disk: ${baselineText}`,
+      `Disk matches editor baseline: ${diskMatchesBaseline ? "yes" : "no"}`,
+      `Disk matches editor buffer: ${diskMatchesBuffer ? "yes" : "no"}`,
     ].join(" | "),
   );
 }
@@ -282,7 +298,7 @@ async function reloadActiveFromDisk(uri) {
   }
   await showDocument(document.uri);
   await vscode.commands.executeCommand("workbench.action.files.revert");
-  await refreshBaseline(document);
+  await refreshBaseline(document, { force: true });
   await checkActiveEditor();
 }
 
@@ -311,6 +327,15 @@ async function checkActiveEditor(uri) {
   renderVisibleEditors();
 }
 
+async function checkOpenDocuments() {
+  for (const document of vscode.workspace.textDocuments) {
+    if (isFileDocument(document)) {
+      await checkDocument(document);
+    }
+  }
+  renderVisibleEditors();
+}
+
 async function checkUri(uri) {
   if (uri.scheme !== "file") {
     return;
@@ -330,11 +355,6 @@ async function checkDocument(document) {
   }
 
   const baseline = baselines.get(document.uri.toString());
-  if (baseline === undefined) {
-    await refreshBaseline(document);
-    return;
-  }
-
   let stat;
   try {
     stat = await vscode.workspace.fs.stat(document.uri);
@@ -343,27 +363,53 @@ async function checkDocument(document) {
     return;
   }
 
-  if (document.isDirty && stat.mtime > baseline.mtime) {
-    const disk = await readDiskContent(document);
-    if (
-      disk !== undefined &&
-      (textMatchesDocument(disk.text, document) ||
-        textMatchesText(disk.text, baseline.text))
-    ) {
-      setBaseline(document, stat, disk.text);
-      clearStale(document.uri);
-    } else {
-      markStale(document, stat, baseline);
+  const decision = decideStaleState({
+    baseline,
+    diskStat: stat,
+    isDirty: document.isDirty,
+  });
+
+  let disk;
+  if (
+    decision.action === DECISION_READ_CONTENT ||
+    decision.action === DECISION_REFRESH_BASELINE ||
+    decision.action === DECISION_MARK_STALE
+  ) {
+    disk = await readDiskContent(document);
+    if (disk === undefined) {
+      clearDocument(document.uri);
+      return;
     }
-  } else if (!document.isDirty && stat.mtime > baseline.mtime) {
-    await refreshBaseline(document);
-  } else {
+  }
+
+  const contentDecision =
+    decision.action === DECISION_READ_CONTENT
+      ? decideStaleState({
+          baseline,
+          diskStat: stat,
+          diskText: disk.text,
+          documentText: document.getText(),
+          isDirty: document.isDirty,
+        })
+      : decision;
+
+  if (contentDecision.action === DECISION_CLEAR_DOCUMENT) {
+    clearDocument(document.uri);
+  } else if (contentDecision.action === DECISION_REFRESH_BASELINE) {
+    setBaseline(document, stat, disk.text);
+    clearStale(document.uri);
+  } else if (contentDecision.action === DECISION_MARK_STALE) {
+    markStale(document, stat, baseline);
+  } else if (contentDecision.action === DECISION_CLEAR_STALE) {
     clearStale(document.uri);
   }
 }
 
-async function refreshBaseline(document) {
+async function refreshBaseline(document, options = {}) {
   if (!isFileDocument(document)) {
+    return;
+  }
+  if (document.isDirty && !options.force) {
     return;
   }
   try {
@@ -399,18 +445,6 @@ function setBaseline(document, stat, text) {
   });
 }
 
-function textMatchesDocument(text, document) {
-  return textMatchesText(text, document.getText());
-}
-
-function textMatchesText(left, right) {
-  return left === right || normalizeEol(left) === normalizeEol(right);
-}
-
-function normalizeEol(text) {
-  return text.replace(/\r\n/g, "\n");
-}
-
 function markStale(document, stat, baseline) {
   const key = document.uri.toString();
   const stateKey = staleStateKey(stat, baseline);
@@ -427,15 +461,6 @@ function markStale(document, stat, baseline) {
   if (previousStateKey !== stateKey) {
     updateActiveEditorContext();
   }
-  diagnostics.set(document.uri, [
-    new vscode.Diagnostic(
-      new vscode.Range(0, 0, 0, 0),
-      `Editor buffer is stale because the file changed on disk after this editor last matched it. File on disk changed ${formatDateTime(
-        stat.mtime,
-      )}; editor last matched disk ${formatDateTime(baseline.mtime)}.`,
-      vscode.DiagnosticSeverity.Warning,
-    ),
-  ]);
 }
 
 async function resolveCommandDocument(uri) {
@@ -542,11 +567,10 @@ function clearStale(uri) {
   staleUris.delete(key);
   staleStates.delete(key);
   dismissedEditorWarnings.delete(key);
-  diagnostics.delete(uri);
   if (hadStaleState) {
     updateActiveEditorContext();
+    renderVisibleEditors();
   }
-  renderVisibleEditors();
 }
 
 function clearDocument(uri) {
