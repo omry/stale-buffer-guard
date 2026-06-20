@@ -2,7 +2,7 @@
   "name": "stale-buffer-guard",
   "displayName": "Stale Buffer Guard",
   "description": "Stops stale VS Code editor tabs after disk changes and warns when unsaved edits are based on old contents.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "omry",
   "license": "MIT",
   "repository": {

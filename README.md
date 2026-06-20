@@ -81,5 +81,5 @@ For a normal install, package it with `vsce`:
 ```bash
 npm install -g @vscode/vsce
 vsce package
-code --install-extension stale-buffer-guard-0.1.0.vsix
+code --install-extension stale-buffer-guard-0.2.0.vsix
 ```

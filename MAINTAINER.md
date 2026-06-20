@@ -24,7 +24,7 @@ dependencies, and `vsce` will derive the output filename from `name` and
 vsce package --no-dependencies
 ```
 
-The package should be small. For `0.1.0`, the expected shape was:
+The package should be small. For `0.2.0`, the expected shape is:
 
 ```text
 6 files, about 26 KB
