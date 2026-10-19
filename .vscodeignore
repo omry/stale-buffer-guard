@@ -5,3 +5,6 @@
 *.vsix
 README.md
 test/**
+.github/**
+.nvmrc
+package-lock.json
