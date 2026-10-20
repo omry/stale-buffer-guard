@@ -111,5 +111,6 @@
         }
       }
     }
-  }
+  },
+  "packageManager": "npm@11.9.0"
 }
